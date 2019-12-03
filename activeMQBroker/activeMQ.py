@@ -2,59 +2,58 @@
 #note above line is for MacPorts python (with Requests module)
 #!/usr/bin/env python
 
-# This is a simple Collector Program who's intent is to demonstrate how
-# we can collect simple Metrics and submit them to CA Wily via
-# the RESTful interface that is part of the EPAgent.
-#
-# This script will collect system statistics via JMX from an ActiveMQ broker.
-# The statistics are stored under the following groups:
-#
-# TODO
-#       collectActiveMQ:
-#           Calls the JMX interface of an ActiveMQ broker via the Jolokia http
-#           interface.and reports broker, queue and topic statistics.
-#
-# The metrics will be default be reported under 'ActiveMQ|<hostname>|...'.  As
-# multiple hosts can report to a single EPAgent's RESTful interace.  The inclusion
-# the <hostname> in the metric path gives a opportunity to disambiguate those
-# usages.
-#
-# Requirements:
-#
-#   This script requires the 'requests' python package in order to process the
-#   RESTful queries.  This can be obtained in one of the following ways:
-#
-#       # yum install python-requests
-#                   or
-#       # pip install requests
-#                   or
-#       # easy_install requests
-#
-# Usage:
-#
-#        Usage: activeMQ.py [options]
-#
-#        Options:
-#          -h, --help            show this help message and exit
-#          -v, --verbose         verbose output
-#          -H HOSTNAME, --hostname=HOSTNAME
-#                                hostname EPAgent is running on
-#          -p PORT, --port=PORT  port EPAgent is connected to
-#          -m METRICPATH, --metric_path=METRICPATH
-#                                metric path header for all metrics
-#          -u USER:PASSWORD, --user=USER:PASSWORD
-#                                user and password for ActiveMQ JMX access
-#          -b BROKERHOSTNAME, --broker=BROKERHOSTNAME
-#                                hostname of ActiveMQ broker
-#          -j JMX_PORT, --jmx_port=JMX_PORT
-#                                JMX port of ActiveMQ broker
+"""
+This is a simple Collector Program who's intent is to demonstrate how
+we can collect simple Metrics and submit them to DX APM via
+the RESTful interface that is part of the EPA/IA.
 
+The metrics will, by default, be reported under 'ActiveMQ|<hostname>|...'.  As
+multiple hosts can report to a single EPA/IA RESTful interface.  The inclusion
+the <hostname> in the metric path gives a opportunity to disambiguate those
+usages.
+
+Requirements:
+
+    This script requires the 'requests' python package in order to process the
+    RESTful queries.  This can be obtained in one of the following ways:
+
+    # yum install python-requests
+                or
+    # pip install requests
+                or
+    # easy_install requests
+
+Usage:
+
+    Usage: activeMQ.py [options]
+
+    Options:
+        -h, --help
+                    show this help message and exit
+        -v, --verbose
+                    verbose output
+        -H HOSTNAME, --hostname=HOSTNAME
+                    hostname EPA/IA is running on
+        -p PORT, --port=PORT
+                    port EPA/IA is connected to
+        -m METRICPATH, --metric_path=METRICPATH
+                    metric path header for all metrics
+        -u USER:PASSWORD, --user=USER:PASSWORD
+                    user and password for ActiveMQ JMX access
+        -b BROKERHOSTNAME, --broker=BROKERHOSTNAME
+                    hostname of ActiveMQ broker
+        -j JMX_PORT, --jmx_port=JMX_PORT
+                    JMX port of ActiveMQ broker
+        -n BROKERNAME, --broker_name=BROKERNAME
+                    ActiveMQ broker being monitored
+        -o PROTOCOL, --protocol
+                    Protocol for ActiveMQ JMX access
+
+"""
 
 import json
 import optparse
-#import random
 import requests
-#import socket
 import sys
 import time
 import urllib2
@@ -80,8 +79,8 @@ def callUrl(url, username):
         try:
             response = urllib2.urlopen(url).read()
         except urllib2.URLError as err:
-            print("Unable to connect to ActiveMQ broker via URL \"{0}\": {1}\ncheck URL, port and that jolokia is enabled!".format(url, err))
-            sys.exit(1)
+            print("Unable to connect to ActiveMQ broker via URL \"{0}\": {1}\ncheck URL, port and that Jolokia is enabled!".format(url, err))
+            #sys.exit(1) # commented to allow for multiple connection attempts
         data = json.loads(response)
     else:
         request = urllib2.Request(url)
@@ -101,8 +100,8 @@ def callUrl(url, username):
         try:
             response = urllib2.urlopen(request, context=ctx)
         except urllib2.URLError as err:
-            print("Unable to connect to ActiveMQ broker via URL \"{0}\": {1}\ncheck URL, port and that jolokia is enabled!".format(url, err))
-            sys.exit(1)
+            print("Unable to connect to ActiveMQ broker via URL \"{0}\": {1}\ncheck URL, port and that Jolokia is enabled!".format(url, err))
+            #sys.exit(1) # commented to allow for multiple connection attempts
         data = json.loads(response.read())
         
     # print(json.dumps(data, sort_keys=True, indent=4))
@@ -135,7 +134,7 @@ def writeMetrics(values, metricPath, metricDict):
                 metricDict['metrics'].append(m)
             else:
                 if ((-1 < key.find('Average', 0, 7)) or (-1 < key.find('PercentUsage', len(key)-12, len(key)))):
-                    # should be IntPercentage for 'PercentUsage' but this is not a EPA supported metric data type
+                    # should be IntPercentage for 'PercentUsage' but this is not a EPA/IA supported metric data type
                     m = {}
                     m['type'] = 'IntAverage'
                     m['name'] = metricPath + ':{0}'.format(key)
@@ -168,13 +167,13 @@ def writeMetrics(values, metricPath, metricDict):
 
 
 
-def collectActiveMQ(metricDict, metricPath, brokerhost, jmxport, brokername, username):
+def collectActiveMQ(metricDict, metricPath, brokerhost, jmxport, brokername, username, protocol):
 
     """
     Conversion of JMX data into metrics to be harvested
     """
 
-    url = "https://{0}:{1}/api/jolokia/read/org.apache.activemq:type=Broker,brokerName={2}".format(brokerhost, jmxport, urllib2.quote(brokername))
+    url = "{0}://{1}:{2}/api/jolokia/read/org.apache.activemq:type=Broker,brokerName={3}".format(protocol, brokerhost, jmxport, urllib2.quote(brokername))
 
     data = callUrl(url, username)
         
@@ -227,9 +226,9 @@ def collectActiveMQ(metricDict, metricPath, brokerhost, jmxport, brokername, use
 def main(argv):
 
     parser = optparse.OptionParser()
+
     parser.add_option("-v", "--verbose", help = "verbose output",
         dest = "verbose", default = False, action = "store_true")
-
     parser.add_option("-H", "--hostname", default = "localhost",
         help = "hostname EPAgent is running on", dest = "hostname")
     parser.add_option("-p", "--port", help = "port EPAgent is connected to",
@@ -244,8 +243,13 @@ def main(argv):
         type = "int", dest = "jmxport", default = "8161")
     parser.add_option("-n", "--broker_name", help = "name of ActiveMQ broker",
         dest = "brokername", default = "localhost")
+    parser.add_option("-o", "--protocol", help = "protocol for ActiveMQ JMX access",
+        dest = "protocol", default = "http")
 
     (options, args) = parser.parse_args();
+
+    if args == 0:
+        print("Using default values for all options")
 
     if options.verbose == True:
         print("Verbose enabled")
@@ -269,18 +273,18 @@ def main(argv):
         # Metrics are collected in the metricDict dictionary.
         metricDict = {'metrics' : []}
 
-        collectActiveMQ(metricDict, options.metricPath, options.brokerhost, options.jmxport, options.brokername, options.user)
+        collectActiveMQ(metricDict, options.metricPath, options.brokerhost, options.jmxport, options.brokername, options.user, options.protocol)
 
         #
         # convert metric Dictionary into a JSON message via the
-        # json package.  Post resulting message to EPAgent RESTful
+        # json package.  Post resulting message to EPA/IA RESTful
         # interface.
         #
         try:
             r = requests.post(url, data = json.dumps(metricDict),
                               headers = headers)
         except requests.ConnectionError as err:
-            print("Unable to connect to EPAgent via URL \"{0}\": {1}\ncheck httpServerPort and that EPAgent is running!".format(url, err))
+            print("Unable to connect to EPA/IA via URL \"{0}\": {1}\ncheck httpServerPort and that EPA/IA is running!".format(url, err))
             sys.exit(1)
 
 
